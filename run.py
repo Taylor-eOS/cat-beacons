@@ -43,44 +43,44 @@ def signal_strength(beacon_pos, point_pos, max_range):
 def strengths_at_point(beacon_positions, point_pos, max_range):
     return [signal_strength(b, point_pos, max_range) for b in beacon_positions]
 
-def compute_heatmap(beacon_positions, max_range):
+def compute_likelihood_heatmap(beacon_positions, measured_strengths, max_range):
+    if not measured_strengths or sum(measured_strengths) == 0:
+        return None, 0.0, None
+    N = len(measured_strengths)
+    sigma = 0.1
     grid_width = 40
     grid_height = 30
     cell_w = SCREEN_WIDTH / grid_width
     cell_h = SCREEN_HEIGHT / grid_height
     heatmap = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-    max_total_strength = 0.0
-    grid_strengths = []
+    max_likelihood = 0.0
+    best_pos = None
+    grid_likelihoods = []
     for gy in range(grid_height):
         row = []
         for gx in range(grid_width):
             x = (gx + 0.5) * cell_w
             y = (gy + 0.5) * cell_h
             cell_pos = (x, y)
-            total_strength = sum(strengths_at_point(beacon_positions, cell_pos, max_range))
-            row.append(total_strength)
-            if total_strength > max_total_strength:
-                max_total_strength = total_strength
-        grid_strengths.append(row)
+            expected = strengths_at_point(beacon_positions, cell_pos, max_range)
+            sse = sum((m - e)**2 for m, e in zip(measured_strengths, expected))
+            likelihood = math.exp(-sse / (2 * sigma**2))
+            row.append(likelihood)
+            if likelihood > max_likelihood:
+                max_likelihood = likelihood
+                best_pos = cell_pos
+        grid_likelihoods.append(row)
     for gy in range(grid_height):
         for gx in range(grid_width):
-            total_strength = grid_strengths[gy][gx]
-            intensity = total_strength / max_total_strength if max_total_strength > 0 else 0.0
+            likelihood = grid_likelihoods[gy][gx]
+            intensity = likelihood / max_likelihood if max_likelihood > 0 else 0.0
             r = int(255 * (1 - intensity))
             g = int(255 * intensity)
             b = int(128 * (1 - intensity))
-            a = int(100 * intensity)
+            a = int(150 * intensity)
             rect = pygame.Rect(gx * cell_w, gy * cell_h, cell_w, cell_h)
             pygame.draw.rect(heatmap, (r, g, b, a), rect)
-    return heatmap, max_total_strength
-
-def estimate_position(beacon_positions, strengths, max_range):
-    if not strengths or sum(strengths) == 0:
-        return None
-    total_strength = sum(strengths)
-    weighted_x = sum(s * b[0] for s, b in zip(strengths, beacon_positions)) / total_strength
-    weighted_y = sum(s * b[1] for s, b in zip(strengths, beacon_positions)) / total_strength
-    return (weighted_x, weighted_y)
+    return heatmap, max_likelihood, best_pos
 
 def draw_beacon(pos):
     pygame.draw.circle(screen, BLUE, pos, 5)
@@ -112,8 +112,7 @@ def detect_and_update(cat_pos_local):
     if not cat_pos_local or not beacons:
         return
     strengths = strengths_at_point(beacons, cat_pos_local, signal_range)
-    estimated_pos = estimate_position(beacons, strengths, signal_range)
-    heatmap_surface, max_confidence = compute_heatmap(beacons, signal_range)
+    heatmap_surface, max_confidence, estimated_pos = compute_likelihood_heatmap(beacons, strengths, signal_range)
 
 running = True
 while running:
@@ -159,7 +158,6 @@ while running:
 
     if cat_pos:
         draw_cat(cat_pos)
-        draw_estimated(estimated_pos)
         if heatmap_surface:
             screen.blit(heatmap_surface, (0, 0))
 
