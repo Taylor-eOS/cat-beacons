@@ -91,8 +91,8 @@ while running:
             elif event.button == 3 and placing_beacons and last_beacon:
                 new_range = dist(last_beacon, (mx, my)) / YARD_SCALE
                 signal_range = max(1.0, new_range)
-                print(f"Range set to {signal_range:.1f}m from last beacon")
-    screen.fill(WHITE)
+                print(f"Range set to {signal_range:.1f} from last beacon")
+    draw_background(screen)
     for b in beacons:
         draw_beacon(screen, b)
     if cat_pos:

@@ -12,16 +12,31 @@ GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
 DARK_GRAY = (50, 50, 50)
 
+background_surf = None
+
 def dist(p1, p2):
     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
 def init_display():
+    global background_surf
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Cat Zone Simulator")
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 24)
+    try:
+        img = pygame.image.load('back.png')
+        img = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        background_surf = img.convert_alpha()
+        background_surf.set_alpha(128)
+    except Exception:
+        background_surf = None
     return screen, clock, font
+
+def draw_background(screen):
+    screen.fill(WHITE)
+    if background_surf:
+        screen.blit(background_surf, (0, 0))
 
 def draw_beacon(screen, pos):
     pygame.draw.circle(screen, BLUE, pos, 5)
