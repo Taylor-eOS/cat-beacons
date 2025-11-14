@@ -13,7 +13,7 @@ houses = []
 heatmap_surface = None
 estimated_pos = None
 max_confidence = 0.0
-BUILDING_ATTENUATION_COEFF = 0.693
+building_attenuation_coeff = 0.5
 
 def compute_intersection(a_x, a_y, b_x, b_y, c_x, c_y, d_x, d_y):
     denom = (b_x - a_x)*(d_y - c_y) - (b_y - a_y)*(d_x - c_x)
@@ -69,7 +69,7 @@ def signal_strength(beacon_pos, point_pos, max_range):
         L = segment_length_inside_poly(beacon_pos, point_pos, house)
         total_inside += L
     if total_inside > 0:
-        base *= math.exp(-BUILDING_ATTENUATION_COEFF * total_inside)
+        base *= math.exp(-building_attenuation_coeff * total_inside)
     if d_meters <= max_range:
         return base
     over = d_meters - max_range
@@ -81,32 +81,33 @@ def signal_strength(beacon_pos, point_pos, max_range):
 def segment_length_inside_poly(p1, p2, poly):
     px, py = p1
     qx, qy = p2
-    tvals = []
-    tvals.append(0.0)
-    tvals.append(1.0)
-    n = len(poly)
-    for i in range(n):
-        ax, ay = poly[i]
-        bx, by = poly[(i + 1) % n]
-        denom = (bx - ax) * (qy - py) - (by - ay) * (qx - px)
-        if abs(denom) < 1e-12:
-            continue
-        t = ((ax - px) * (qy - py) - (ay - py) * (qx - px)) / denom
-        u = ((ax - px) * (by - ay) - (ay - py) * (bx - ax)) / denom
-        if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
-            tvals.append(t)
-    tvals = sorted(set(tvals))
-    total_pixels = 0.0
-    for i in range(len(tvals) - 1):
-        ta = tvals[i]
-        tb = tvals[i + 1]
-        tm = 0.5 * (ta + tb)
-        mx = px + tm * (qx - px)
-        my = py + tm * (qy - py)
-        if point_in_convex_poly((mx, my), poly):
-            seg_px = math.hypot((tb - ta) * (qx - px), (tb - ta) * (qy - py))
-            total_pixels += seg_px
-    total_meters = total_pixels / YARD_SCALE
+    dx = qx - px
+    dy = qy - py
+    total_pixel_length = math.hypot(dx, dy)
+    if total_pixel_length < 1e-9:
+        return 0.0
+    step_px = 5.0
+    n_steps = max(20, int(math.ceil(total_pixel_length / step_px)))
+    inside_pixels = 0.0
+    prev_inside = point_in_convex_poly((px, py), poly)
+    prev_x, prev_y = px, py
+    for i in range(1, n_steps + 1):
+        t = i / n_steps
+        cx = px + t * dx
+        cy = py + t * dy
+        curr_inside = point_in_convex_poly((cx, cy), poly)
+        if prev_inside and curr_inside:
+            seg_len = math.hypot(cx - prev_x, cy - prev_y)
+            inside_pixels += seg_len
+        elif prev_inside and not curr_inside:
+            seg_len = math.hypot(cx - prev_x, cy - prev_y)
+            inside_pixels += seg_len * 0.5
+        elif not prev_inside and curr_inside:
+            seg_len = math.hypot(cx - prev_x, cy - prev_y)
+            inside_pixels += seg_len * 0.5
+        prev_inside = curr_inside
+        prev_x, prev_y = cx, cy
+    total_meters = inside_pixels / YARD_SCALE
     return total_meters
 
 def strengths_at_point(beacon_positions, point_pos, max_range):
@@ -197,6 +198,13 @@ while running:
         pygame.draw.polygon(screen, DARK_GRAY, house, 2)
     for b in beacons:
         draw_beacon(screen, b)
+    if cat_pos and beacons:
+        strengths = strengths_at_point(beacons, cat_pos, signal_range)
+        for b, s in zip(beacons, strengths):
+            intensity = max(0.0, min(1.0, s))
+            color = (int(255 * (1.0 - intensity)), int(255 * intensity), 0)
+            width = max(1, int(1 + intensity * 12))
+            pygame.draw.line(screen, color, b, cat_pos, width)
     if cat_pos:
         draw_cat(screen, cat_pos)
         if heatmap_surface:
@@ -206,3 +214,4 @@ while running:
     clock.tick(60)
 pygame.quit()
 sys.exit()
+
