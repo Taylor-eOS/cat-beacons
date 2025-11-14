@@ -64,9 +64,11 @@ def create_heatmap_surface(grid_likelihoods, max_likelihood):
             pygame.draw.rect(heatmap, (r, g, b, a), rect)
     return heatmap
 
-def draw_ui(screen, font, placing_beacons, beacons, cat_pos, estimated_pos, max_confidence):
+def draw_ui(screen, font, placing_beacons, house_placement, house_corners, beacons, cat_pos, estimated_pos, max_confidence):
     if placing_beacons:
         prompt = f"Click to place beacons (max 6, have {len(beacons)}). After a beacon, right-click to set range from it. SPACE to start, ESC quit."
+    elif house_placement:
+        prompt = f"Placing houses: click four corners for a house (have {len(house_corners)}/4). SPACE to start cat mode, ESC quit."
     else:
         prompt = "Left-click for cat position (redraws heatmap). ESC quit."
     text = font.render(prompt, True, BLACK)
